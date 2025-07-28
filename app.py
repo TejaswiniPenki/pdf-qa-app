@@ -7,6 +7,12 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from PyPDF2 import PdfReader
 import os
+import asyncio
+
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 # Set the Google API Key in the environment
 st.set_page_config(page_title="PDF QA App", page_icon="📄", layout="wide")
