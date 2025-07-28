@@ -5,36 +5,29 @@ from langchain.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
-from PyPDF2 import PdfReader
+from langchain_community.document_loaders import WebBaseLoader
 import os
 
 # Set the Google API Key in the environment
-st.set_page_config(page_title="PDF QA App", page_icon="📄", layout="wide")
+st.set_page_config(page_title="Interactive QA App", page_icon="🧙‍♂️", layout="wide")
 st.markdown(
     """
     <style>
     body {
-        background-color: #eef2f3;
-        color: #2c3e50;
-        font-family: Arial, sans-serif;
+        background-color: #f0f4f5;
+        color: #333333;
     }
     .stButton>button {
-        background-color: #3498db;
+        background-color: #4CAF50;
         color: white;
         font-size: 16px;
-        padding: 8px 16px;
-        border: none;
-        border-radius: 6px;
-        transition: 0.3s;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        transition: background-color 0.3s;
     }
     .stButton>button:hover {
-        background-color: #2980b9;
-    }
-    .stFileUploader {
-        margin-bottom: 20px;
-    }
-    .stTextArea {
-        margin-top: 10px;
+        background-color: #45a049;
     }
     </style>
     """,
@@ -42,12 +35,12 @@ st.markdown(
 )
 
 # App Header
-st.title("📄 PDF QA App with Generative AI")
-st.write("Upload a PDF document, ask a question, and get accurate, detailed responses.")
+st.title("📚 Interactive QA App with Generative AI")
+st.write("Ask detailed questions based on contextual data, and get accurate and rich responses.")
 
-# Input: Google API Key
+# Prompt user for API key
 api_key = st.text_input(
-    "AIzaSyAgs2Nh03eMQRyUPWLWS1UrmPgVocy4-FA",
+    "Enter your Google API key:",
     type="password",
     help="Your API key is required to use the Google Generative AI services.",
 )
@@ -55,30 +48,17 @@ api_key = st.text_input(
 if api_key:
     os.environ["GOOGLE_API_KEY"] = api_key
 
-# File Upload Section
-st.sidebar.header("📂 Upload a PDF")
-uploaded_file = st.sidebar.file_uploader(
-    "Choose a PDF file to extract content:",
-    type=["pdf"],
-)
-
-# User Question Section
-st.sidebar.header("📝 Ask a Question")
-user_question = st.sidebar.text_area(
-    "Enter your question:",
-    placeholder="E.g., What is the main topic of the document?",
-)
-
+# Load Data
 @st.cache_data
-def extract_text_from_pdf(pdf_file):
+def get_pdf_text(url):
     """
-    Extracts text from a PDF file using PyPDF2.
+    Loads content from a predefined URL and processes it into a string.
     """
-    pdf_reader = PdfReader(pdf_file)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
+    loader = WebBaseLoader(url)
+    documents = loader.load()
+    text = "\n\n".join([doc.page_content for doc in documents])
     return text
+
 
 @st.cache_data
 def get_text_chunks(text):
@@ -87,6 +67,7 @@ def get_text_chunks(text):
     """
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
     return text_splitter.split_text(text)
+
 
 @st.cache_resource
 def get_vector_store(text_chunks):
@@ -98,6 +79,18 @@ def get_vector_store(text_chunks):
     vector_store.save_local("faiss_index")
     return vector_store
 
+st.sidebar.header("📝 Enter the URL")
+st.sidebar.write("Provide a URL and ask a question based on the document's content.")
+# Input for URL
+url = st.sidebar.text_input("Enter the URL to extract context from:", 
+    placeholder="e.g., https://en.wikipedia.org/wiki/Harry_Potter")
+
+
+# Prepare Data
+if api_key:
+    st.sidebar.header("📋 Preparing Data...")
+
+# Conversational Chain
 def get_conversational_chain():
     """
     Creates a conversational chain for QA using LangChain and Google Generative AI.
@@ -115,49 +108,47 @@ def get_conversational_chain():
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
-# Process Uploaded File
-if uploaded_file and api_key and user_question:
-    with st.spinner("Processing your PDF..."):
+
+
+
+# User Interaction
+st.sidebar.header("📝 Ask a Question")
+user_question = st.sidebar.text_area(
+    "Enter your question:",
+    placeholder="E.g., Name and Plot of Harry Potter First Movie.",
+)
+
+if st.sidebar.button("Get Answer"):
+    if url and api_key and user_question:
         try:
-            # Step 1: Extract text from PDF
-            raw_text = extract_text_from_pdf(uploaded_file)
+            with st.spinner("Searching for the answer..."):
+                text = get_pdf_text(url)
+                chunks = get_text_chunks(text)
+                vectorstore = get_vector_store(chunks)
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+                new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+                docs = new_db.similarity_search(user_question)
+                chain = get_conversational_chain()
+                response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
 
-            # Step 2: Split text into chunks
-            text_chunks = get_text_chunks(raw_text)
-
-            # Step 3: Embed text into a vector store
-            vector_store = get_vector_store(text_chunks)
-
-            # Step 4: Perform similarity search and generate the answer
-            embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-            new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-            docs = new_db.similarity_search(user_question)
-            chain = get_conversational_chain()
-            response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
-
-            # Display the results
             st.success("Answer Generated!")
             st.subheader("Your Question:")
             st.write(user_question)
 
             st.subheader("Generated Answer:")
+            # Display the response line by line
             for line in response["output_text"].split("\n"):
-                if line.strip():
+                if line.strip(): 
                     st.write(line)
         except Exception as e:
             st.error(f"An error occurred: {e}")
-else:
-    if not api_key:
-        st.warning("Please provide your Google API key.")
-    if not uploaded_file:
-        st.warning("Please upload a PDF file.")
-    if not user_question:
-        st.warning("Please enter a question.")
+    else:
+        st.warning("Please provide both the API key and a question.")
 
 # Footer
 st.markdown(
     """
     ---
-    🌟 Powered by LangChain and Google Generative AI
+    🤖 Powered by LangChain and Google Generative AI
     """
 )
