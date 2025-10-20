@@ -9,6 +9,7 @@ from PyPDF2 import PdfReader
 import os
 import asyncio
 
+
 try:
     asyncio.get_running_loop()
 except RuntimeError:
