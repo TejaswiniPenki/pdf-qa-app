@@ -2,12 +2,11 @@ import streamlit as st
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
-from langchain.chains.combine_documents import load_qa_chain   # ✅ new path
-from langchain.prompts import PromptTemplate
+from langchain_community.chains.combine_documents import load_qa_chain
+from langchain_core.prompts import PromptTemplate
 from PyPDF2 import PdfReader
 import os
 import asyncio
-
 try:
     asyncio.get_running_loop()
 except RuntimeError:
