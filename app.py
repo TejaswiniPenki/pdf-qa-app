@@ -100,7 +100,7 @@ def get_conversational_chain(vector_store):
     Creates a RetrievalQA chain instead of the deprecated load_qa_chain.
     """
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 3})
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
     return RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
